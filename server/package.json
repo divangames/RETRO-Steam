@@ -1,0 +1,12 @@
+{
+  "name": "retro-api",
+  "version": "1.0.0",
+  "description": "RETRO SMD games API server",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

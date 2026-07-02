@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SMD Player</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        background: #05070c;
+        color: #e7efff;
+        font-family: "Segoe UI", Arial, sans-serif;
+      }
+
+      .player-wrap {
+        width: 100%;
+        height: 100%;
+        display: grid;
+        grid-template-rows: 46px 1fr;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        padding: 0 14px;
+        background: #0a0f18;
+        color: #c9d7f0;
+        font-size: 13px;
+      }
+
+      #game {
+        width: 100%;
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="player-wrap">
+      <div id="title" class="topbar"></div>
+      <div id="game"></div>
+    </div>
+
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      const romUrl = params.get("romUrl");
+      const title = params.get("title") || "SMD Game";
+      document.getElementById("title").textContent = title;
+
+      window.EJS_player = "#game";
+      window.EJS_core = "segaMD";
+      window.EJS_pathtodata = "https://cdn.emulatorjs.org/stable/data/";
+      window.EJS_gameUrl = romUrl;
+      window.EJS_startOnLoaded = true;
+
+      const script = document.createElement("script");
+      script.src = "https://cdn.emulatorjs.org/stable/data/loader.js";
+      script.onerror = () => {
+        document.getElementById("game").innerHTML = "<div style='padding:16px'>Ошибка загрузки EmulatorJS.</div>";
+      };
+      document.body.appendChild(script);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,7 @@
+[server]
+host     = 45.12.72.82
+port     = 22
+user     = root
+password = YOUR_PASSWORD_HERE
+remote_games = /home/projects/retro-api/games/SMD
+api_url  = http://45.12.72.82:3721

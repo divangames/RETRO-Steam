@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RETRO SMD Emulator</title>
+    <link rel="stylesheet" href="../../node_modules/github-markdown-css/github-markdown.css" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="catalogView" class="view">
+      <header class="topbar">
+        <div class="topbar-brand">
+          <h1>SMD Games</h1>
+          <div class="topbar-subtitle">Русская локализация всех игр · Геймпады Xbox / PS4 / PS5</div>
+        </div>
+        <div class="topbar-actions">
+          <div
+            id="gamepadIndicator"
+            class="gamepad-indicator hidden"
+            title="Подключённый геймпад"
+            aria-live="polite"
+          >
+            <span class="gamepad-indicator-icon" aria-hidden="true">🎮</span>
+            <span id="gamepadIndicatorName"></span>
+          </div>
+          <button
+            id="toggleMyGamesButton"
+            class="ghost-button icon-button"
+            title="Показать Мои игры"
+            aria-label="Показать Мои игры"
+          >
+            <span class="icon icon-games" aria-hidden="true"></span>
+          </button>
+          <button
+            id="toggleBookmarksButton"
+            class="ghost-button icon-button"
+            title="Показать Буду играть"
+            aria-label="Показать Буду играть"
+          >
+            <span class="icon icon-bookmark" aria-hidden="true"></span>
+          </button>
+          <button
+            id="toggleFiltersButton"
+            class="ghost-button icon-button"
+            title="Показать фильтр"
+            aria-label="Показать фильтр"
+          >
+            <span class="icon icon-filter" aria-hidden="true"></span>
+          </button>
+          <div class="docs-menu" id="docsMenu">
+            <button
+              id="docsMenuButton"
+              class="ghost-button docs-menu-button"
+              title="Документация"
+              aria-label="Документация"
+              aria-haspopup="true"
+              aria-expanded="false"
+            >
+              Документация
+              <span class="docs-menu-caret" aria-hidden="true">▾</span>
+            </button>
+            <div id="docsDropdown" class="docs-dropdown hidden" role="menu">
+              <button
+                id="docsAddGamesButton"
+                class="docs-dropdown-item"
+                role="menuitem"
+              >
+                Добавить свои игры
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div class="layout filters-hidden">
+        <aside id="sidebar" class="sidebar hidden">
+          <h2>Фильтр</h2>
+          <label class="filter-label">
+            Поиск
+            <input id="searchInput" type="text" placeholder="Название игры..." />
+          </label>
+
+          <label class="filter-label">
+            Жанр
+            <select id="genreSelect">
+              <option value="all">Все жанры</option>
+            </select>
+          </label>
+
+          <label class="filter-label">
+            Игроки
+            <select id="playersSelect">
+              <option value="all">Любое</option>
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3+</option>
+            </select>
+          </label>
+
+          <label class="filter-label">
+            Первая буква
+            <select id="letterSelect">
+              <option value="all">Все</option>
+            </select>
+          </label>
+
+          <label class="filter-label">
+            Сортировка
+            <select id="sortSelect">
+              <option value="az">По алфавиту (А-Я / A-Z)</option>
+              <option value="za">По алфавиту (Я-А / Z-A)</option>
+            </select>
+          </label>
+        </aside>
+
+        <main>
+          <section class="catalog-section">
+            <div id="cardsGrid" class="cards-grid"></div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <div id="detailsView" class="view hidden">
+      <header class="topbar">
+        <button
+          id="backButton"
+          class="ghost-button back-icon-button"
+          title="Назад к каталогу"
+          aria-label="Назад к каталогу"
+        >
+          <span class="icon icon-back" aria-hidden="true"></span>
+        </button>
+      </header>
+
+      <main class="details-content">
+        <section class="hero">
+          <div class="hero-media" aria-hidden="true">
+            <video id="heroVideo" class="hero-video hidden" autoplay muted loop playsinline></video>
+            <img id="heroBackground" class="hero-background" alt="" />
+          </div>
+          <div class="hero-front">
+            <div class="hero-overlay"></div>
+            <div class="hero-content">
+              <img id="heroLogo" class="hero-logo hidden" alt="logo" />
+              <h2 id="heroTitle"></h2>
+              <p id="heroSubtitle">Ретро-классика Sega Mega Drive</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="game-meta">
+          <div class="cover-column">
+            <div class="cover-wrap">
+              <img id="cover" alt="cover" />
+            </div>
+          </div>
+
+          <div class="meta-main">
+            <h2 id="title"></h2>
+            <div id="metaBadges" class="meta-badges"></div>
+            <pre id="description" class="description"></pre>
+            <div id="recommendedWrap" class="recommended-wrap hidden">
+              <div class="recommended-title">Рекомендованные игры</div>
+              <div id="recommendedList" class="recommended-list"></div>
+            </div>
+            <div id="ostControls" class="ost-controls hidden">
+              <div class="ost-tabs">
+                <button id="ostTabPlayer" class="ost-tab active" type="button">Плеер</button>
+                <button id="ostTabPlaylist" class="ost-tab" type="button">Плейлисты</button>
+              </div>
+              <div id="ostNowPlaying" class="ost-now-playing">OST: —</div>
+              <div id="ostPanelPlayer" class="ost-panel">
+                <div class="ost-actions">
+                  <button id="ostPrevButton" class="ost-icon-button" type="button" aria-label="Предыдущий трек">
+                    <span class="ost-icon ost-icon-prev" aria-hidden="true"></span>
+                  </button>
+                  <button id="ostPauseButton" class="ost-icon-button" type="button" aria-label="Пауза или играть">
+                    <span class="ost-icon ost-icon-pause" aria-hidden="true"></span>
+                  </button>
+                  <button id="ostNextButton" class="ost-icon-button" type="button" aria-label="Следующий трек">
+                    <span class="ost-icon ost-icon-next" aria-hidden="true"></span>
+                  </button>
+                  <button id="ostMuteButton" class="ost-icon-button" type="button" aria-label="Включить или выключить звук">
+                    <span class="ost-icon ost-icon-volume" aria-hidden="true"></span>
+                  </button>
+                  <input
+                    id="ostVolumeSlider"
+                    class="ost-volume-slider"
+                    type="range"
+                    min="0"
+                    max="100"
+                    value="70"
+                    step="1"
+                    aria-label="Громкость OST"
+                  />
+                </div>
+                <div class="ost-progress-row">
+                  <span id="ostCurrentTime" class="ost-time">0:00</span>
+                  <input
+                    id="ostProgressSlider"
+                    class="ost-progress-slider"
+                    type="range"
+                    min="0"
+                    max="100"
+                    value="0"
+                    step="0.1"
+                    aria-label="Позиция трека"
+                  />
+                  <span id="ostDurationTime" class="ost-time">0:00</span>
+                </div>
+              </div>
+              <div id="ostPanelPlaylist" class="ost-panel hidden">
+                <div id="ostPlaylistNowPlaying" class="ost-now-playing">Сейчас: —</div>
+                <div id="ostPlaylist" class="ost-playlist"></div>
+              </div>
+            </div>
+            <div class="main-actions">
+              <button
+                id="bookmarkButton"
+                class="bookmark-toggle-button action-icon-button"
+                type="button"
+                title="Буду играть"
+                aria-label="Буду играть"
+              >
+                <span class="icon icon-bookmark" aria-hidden="true"></span>
+              </button>
+              <button
+                id="playButton"
+                class="play-button action-icon-button"
+                title="Играть"
+                aria-label="Играть"
+              >
+                <span class="icon icon-play" aria-hidden="true"></span>
+              </button>
+            </div>
+          </div>
+
+          <aside class="meta-side">
+            <div id="ratingValue" class="rating-value">7.8</div>
+            <div id="ratingVotes" class="rating-votes">Ретро-рейтинг</div>
+            <div id="ratingStars" class="rating-stars" aria-label="Рейтинг в звездах"></div>
+            <div id="communityRatingRow" class="community-rating-row hidden">
+              Сообщество:
+              <span id="communityRatingVal" class="community-rating-val"></span>
+              <span id="communityRatingCount" class="community-rating-count"></span>
+            </div>
+            <div class="rating-editor">
+              <div>Мой рейтинг</div>
+              <div id="userStarsEditor" class="user-stars-editor">
+                <button class="star-btn" data-star="1" aria-label="1 звезда">★</button>
+                <button class="star-btn" data-star="2" aria-label="2 звезды">★</button>
+                <button class="star-btn" data-star="3" aria-label="3 звезды">★</button>
+                <button class="star-btn" data-star="4" aria-label="4 звезды">★</button>
+                <button class="star-btn" data-star="5" aria-label="5 звезд">★</button>
+              </div>
+            </div>
+            <div class="side-line"></div>
+            <div id="metaFacts" class="meta-facts"></div>
+          </aside>
+        </section>
+
+        <section class="screens-panel">
+          <div class="media-tabs">
+            <button id="tabScreens" class="media-tab active">Скриншоты</button>
+            <button id="tabVideo" class="media-tab hidden">Видео прохождение</button>
+            <button id="tabCheats" class="media-tab hidden">Чит-коды</button>
+          </div>
+
+          <div id="panelScreens" class="media-panel">
+            <div id="screensGallery" class="screens-gallery"></div>
+          </div>
+
+          <div id="panelVideo" class="media-panel hidden">
+            <video id="walkthroughVideo" class="walkthrough-video" controls></video>
+          </div>
+
+          <div id="panelCheats" class="media-panel hidden">
+            <div id="cheatsText" class="cheats-text markdown-body"></div>
+          </div>
+        </section>
+
+        <section id="emulatorPanel" class="emulator-panel hidden">
+          <h3>Эмулятор</h3>
+          <div id="emulatorContainer" class="emulator-container"></div>
+        </section>
+      </main>
+    </div>
+
+    <div id="imageModal" class="image-modal hidden">
+      <div id="modalBackdrop" class="modal-backdrop"></div>
+      <button id="modalPrevButton" class="modal-nav modal-nav-left" aria-label="Предыдущий скриншот">
+        &#10094;
+      </button>
+      <img id="modalImage" class="modal-image" alt="screenshot full" />
+      <button id="modalNextButton" class="modal-nav modal-nav-right" aria-label="Следующий скриншот">
+        &#10095;
+      </button>
+      <div id="modalCounter" class="modal-counter"></div>
+    </div>
+
+    <div id="docsView" class="view hidden">
+      <header class="topbar">
+        <button
+          id="docsBackButton"
+          class="ghost-button back-icon-button"
+          title="Назад к каталогу"
+          aria-label="Назад к каталогу"
+        >
+          <span class="icon icon-back" aria-hidden="true"></span>
+        </button>
+        <div class="topbar-brand">
+          <h1>Документация</h1>
+        </div>
+      </header>
+
+      <main class="docs-content">
+        <article class="docs-article">
+          <h2>Как добавить свои игры</h2>
+          <p>
+            Приложение загружает игры с основного сервера автоматически.
+            Дополнительно вы можете положить свои ROM-файлы в локальную папку
+            <code>games/SMD/</code> рядом с приложением — они появятся в каталоге
+            с пометкой <span class="local-badge-example">Свои</span>.
+          </p>
+
+          <h3>Структура папки игры</h3>
+          <pre class="docs-code">games/
+  SMD/
+    Название игры/          ← папка с именем игры
+      cover.jpg             ← обложка (рекомендуется 800×1200 px, формат 2:3)
+      info.data             ← описание (первая строка = заголовок)
+      ИмяИгры.gen           ← ROM-файл Sega Mega Drive (обязательно)
+      cheats.md             ← чит-коды в формате Markdown (необязательно)
+      logo.png              ← логотип для героя-экрана (необязательно)
+      видео.mp4             ← видео-прохождение (необязательно)
+      screens/              ← папка со скриншотами
+        screen1.png
+        screen2.jpg
+        ...
+      OST/                  ← папка с музыкой из игры
+        01. Track.mp3
+        02. Track.mp3
+        ...</pre>
+
+          <h3>Поддерживаемые форматы</h3>
+          <table class="docs-table">
+            <thead>
+              <tr><th>Тип файла</th><th>Форматы</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>ROM</td><td><code>.gen</code></td></tr>
+              <tr><td>Обложка / скриншоты</td><td><code>.png</code>, <code>.jpg</code>, <code>.jpeg</code>, <code>.webp</code></td></tr>
+              <tr><td>Видео</td><td><code>.mp4</code>, <code>.webm</code>, <code>.m4v</code>, <code>.mov</code></td></tr>
+              <tr><td>Музыка (OST)</td><td><code>.mp3</code>, <code>.ogg</code>, <code>.wav</code>, <code>.m4a</code>, <code>.aac</code>, <code>.flac</code></td></tr>
+            </tbody>
+          </table>
+
+          <h3>Формат файла info.data</h3>
+          <pre class="docs-code">Contra: Hard Corps
+
+Легендарный run-and-gun от Konami. Выберите одного из четырёх
+бойцов и уничтожьте армию мутантов.
+
+• Жанр: Action / Run and Gun
+• Игроки: 2
+• Год: 1994
+• Разработчик: Konami
+• Рекомендованные игры: Gunstar Heroes, Battletoads and Double Dragon</pre>
+          <ul class="docs-notes">
+            <li>Первая строка — название игры (отображается как заголовок карточки).</li>
+            <li>Строки, начинающиеся с <code>•</code>, разбираются как метаданные.</li>
+            <li>Поля <code>Жанр</code> и <code>Игроки</code> используются в фильтрах.</li>
+            <li>Поле <code>Рекомендованные игры</code> строит блок похожих игр.</li>
+          </ul>
+
+          <h3>Требования к обложке</h3>
+          <ul class="docs-notes">
+            <li>Рекомендуемое соотношение сторон: <strong>2:3</strong> (ширина:высота).</li>
+            <li>Минимальная высота: <strong>1200 px</strong>.</li>
+            <li>При отсутствии обложки приложение покажет название игры вместо изображения.</li>
+          </ul>
+
+          <h3>Примечания</h3>
+          <ul class="docs-notes">
+            <li>Локальные игры отображаются в каталоге с пометкой <span class="local-badge-example">Свои</span>.</li>
+            <li>Если в локальной папке есть игра с тем же именем, что и на сервере — приоритет у локальной версии.</li>
+            <li>Оценки и «Буду играть» сохраняются локально; личный рейтинг также отправляется на общий сервер для формирования средней оценки.</li>
+          </ul>
+        </article>
+      </main>
+    </div>
+
+    <div id="hoverPreview" class="hover-preview hidden">
+      <div id="hoverPreviewTitle" class="hover-preview-title"></div>
+      <div id="hoverPreviewDescription" class="hover-preview-description"></div>
+      <div id="hoverPreviewScreens" class="hover-preview-screens"></div>
+    </div>
+    <div id="actionTooltip" class="action-tooltip hidden"></div>
+
+    <script src="../../node_modules/marked/lib/marked.umd.js"></script>
+    <script src="./renderer.js"></script>
+  </body>
+</html>

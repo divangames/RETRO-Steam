@@ -1,0 +1,56 @@
+{
+  "name": "retro-smd-emulator",
+  "version": "1.0.0",
+  "description": "Desktop launcher and emulator for SMD games",
+  "author": "RETRO Team",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win nsis",
+    "build:portable": "electron-builder --win portable"
+  },
+  "dependencies": {
+    "github-markdown-css": "^5.9.0",
+    "marked": "^18.0.2"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^26.8.1"
+  },
+  "build": {
+    "appId": "retro.smd.emulator",
+    "productName": "RETRO SMD Emulator",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "games",
+        "to": "games"
+      },
+      {
+        "from": "source",
+        "to": "source"
+      }
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "artifactName": "${productName}-${version}-${target}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}
