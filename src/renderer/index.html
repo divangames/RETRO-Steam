@@ -171,7 +171,26 @@
         <section class="game-meta">
           <div class="cover-column">
             <div class="cover-wrap">
-              <img id="cover" alt="cover" />
+              <div class="box-scene">
+                <div class="box-window">
+                  <img id="cover" class="box-cover-art" alt="cover" />
+                  <div class="box-spotlight" aria-hidden="true"></div>
+                </div>
+                <img
+                  class="box-frame"
+                  src="../../source/images/box/01_box_frame.png"
+                  alt=""
+                  aria-hidden="true"
+                  draggable="false"
+                />
+                <img
+                  class="box-effect"
+                  src="../../source/images/box/02_cover_effect.png"
+                  alt=""
+                  aria-hidden="true"
+                  draggable="false"
+                />
+              </div>
             </div>
           </div>
 
@@ -461,6 +480,16 @@
 
       <button id="logoutButton" class="friends-logout-btn">Выйти</button>
     </div>
+
+    <!-- SVG filters -->
+    <svg aria-hidden="true" focusable="false" style="width:0;height:0;position:absolute;overflow:hidden">
+      <defs>
+        <filter id="box-noise" x="-5%" y="-5%" width="110%" height="110%" color-interpolation-filters="linearRGB">
+          <feTurbulence type="fractalNoise" baseFrequency="0.62 0.72" numOctaves="4" seed="7" stitchTiles="stitch" result="noise"/>
+          <feDisplacementMap in="SourceGraphic" in2="noise" scale="10" xChannelSelector="R" yChannelSelector="G"/>
+        </filter>
+      </defs>
+    </svg>
 
     <script src="../../node_modules/marked/lib/marked.umd.js"></script>
     <script src="./renderer.js"></script>

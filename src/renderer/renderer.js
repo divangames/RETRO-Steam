@@ -79,6 +79,8 @@ const hoverPreviewScreensNode = document.getElementById("hoverPreviewScreens");
 const actionTooltipNode = document.getElementById("actionTooltip");
 const gamepadIndicatorNode = document.getElementById("gamepadIndicator");
 const gamepadIndicatorNameNode = document.getElementById("gamepadIndicatorName");
+const boxWindowNode        = document.querySelector(".box-window");
+const boxSpotlightNode     = document.querySelector(".box-spotlight");
 const refreshGamesButton   = document.getElementById("refreshGamesButton");
 const userProfileButton    = document.getElementById("userProfileButton");
 const userAvatarCircle     = document.getElementById("userAvatarCircle");
@@ -148,6 +150,9 @@ let activeOstTab = "player";
 let isBookmarksMode = false;
 let isMyGamesMode = false;
 let catalogFocusIndex = 0;
+let isGamepadFocusVisible = false;
+let gamepadIdleTimer = null;
+const GAMEPAD_IDLE_MS = 2000;
 let gamepadLoopTimer = null;
 const lastGamepadButtons = new Map();
 const GAMEPAD_POLL_MS = 120;
@@ -693,7 +698,7 @@ function renderCards() {
   filteredGames.forEach((game) => {
     const index = filteredGames.indexOf(game);
     const card = document.createElement("article");
-    const isFocused = !catalogView.classList.contains("hidden") && index === catalogFocusIndex;
+    const isFocused = isGamepadFocusVisible && !catalogView.classList.contains("hidden") && index === catalogFocusIndex;
     card.className = `card${selectedGame?.id === game.id ? " active" : ""}${isFocused ? " gamepad-focus" : ""}`;
     card.addEventListener("click", () => {
       playUiSound(choiceSound);
@@ -1157,6 +1162,7 @@ function selectGame(id) {
 
 function openGameDetails(id) {
   hideHoverPreview();
+  clearGamepadFocus();
   selectGame(id);
   if (!selectedGame) return;
   catalogView.classList.add("hidden");
@@ -1396,6 +1402,7 @@ window.addEventListener("gamepadconnected", (e) => {
 
 window.addEventListener("gamepaddisconnected", () => {
   updateGamepadIndicator();
+  clearGamepadFocus();
 });
 
 function getPrimaryGamepad() {
@@ -1448,6 +1455,26 @@ function gamepadNavSound() {
   }
 }
 
+function clearGamepadFocus() {
+  isGamepadFocusVisible = false;
+  if (gamepadIdleTimer) { clearTimeout(gamepadIdleTimer); gamepadIdleTimer = null; }
+  cardsGridNode.querySelectorAll(".card.gamepad-focus").forEach(c => c.classList.remove("gamepad-focus"));
+}
+
+function wakeGamepadFocus() {
+  if (!isGamepadFocusVisible) {
+    isGamepadFocusVisible = true;
+    // Paint the focus class on the right card without full re-render
+    const cards = Array.from(cardsGridNode.querySelectorAll(".card"));
+    cards.forEach((c, i) => c.classList.toggle("gamepad-focus", i === catalogFocusIndex));
+  }
+  if (gamepadIdleTimer) clearTimeout(gamepadIdleTimer);
+  gamepadIdleTimer = setTimeout(() => {
+    gamepadIdleTimer = null;
+    clearGamepadFocus();
+  }, GAMEPAD_IDLE_MS);
+}
+
 function closeModalIfOpen() {
   if (imageModal.classList.contains("hidden")) return false;
   imageModal.classList.add("hidden");
@@ -1456,6 +1483,14 @@ function closeModalIfOpen() {
 
 function handleCatalogGamepad(pressed) {
   if (!filteredGames.length) return;
+
+  const anyInput = pressed.navLeft || pressed.navRight || pressed.navUp || pressed.navDown
+    || pressed.a || pressed.b || pressed.x || pressed.y
+    || pressed.lb || pressed.rb || pressed.start || pressed.select;
+  if (!anyInput) return;
+
+  wakeGamepadFocus();
+
   const rowStep = getCardsPerRow();
   let moved = false;
   if (pressed.navLeft)  { setCatalogFocus(catalogFocusIndex - 1);        moved = true; }
@@ -1608,6 +1643,22 @@ document.addEventListener("click", (e) => {
     closeDocsDropdown();
   }
 });
+
+/* ══════════════════════════════════════════════════════════════
+   Cover spotlight — follows mouse inside the box window
+   ══════════════════════════════════════════════════════════════ */
+
+if (boxWindowNode && boxSpotlightNode) {
+  boxWindowNode.addEventListener("mousemove", (e) => {
+    const r = boxWindowNode.getBoundingClientRect();
+    const x = ((e.clientX - r.left) / r.width  * 100).toFixed(1);
+    const y = ((e.clientY - r.top)  / r.height * 100).toFixed(1);
+    boxWindowNode.style.setProperty("--sx", `${x}%`);
+    boxWindowNode.style.setProperty("--sy", `${y}%`);
+  });
+  boxWindowNode.addEventListener("mouseenter", () => { boxSpotlightNode.style.opacity = "1"; });
+  boxWindowNode.addEventListener("mouseleave", () => { boxSpotlightNode.style.opacity = "0"; });
+}
 
 /* ══════════════════════════════════════════════════════════════
    Refresh games
