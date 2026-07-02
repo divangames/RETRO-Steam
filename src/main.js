@@ -242,6 +242,65 @@ ipcMain.handle("ratings:set", async (_, { gameId, value }) => {
   }
 });
 
+/* ─── Auth IPC ─────────────────────────────────────────────────── */
+
+async function serverPost(path, body) {
+  const response = await fetch(`${SERVER_BASE_URL}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(8_000)
+  });
+  return response.json();
+}
+
+async function serverGet(path) {
+  const response = await fetch(`${SERVER_BASE_URL}${path}`, {
+    signal: AbortSignal.timeout(8_000)
+  });
+  return response.json();
+}
+
+ipcMain.handle("auth:register", async (_, { nickname, password }) => {
+  try { return await serverPost("/api/auth/register", { nickname, password }); }
+  catch { return { error: "Нет соединения с сервером" }; }
+});
+
+ipcMain.handle("auth:login", async (_, { nickname, password }) => {
+  try { return await serverPost("/api/auth/login", { nickname, password }); }
+  catch { return { error: "Нет соединения с сервером" }; }
+});
+
+ipcMain.handle("auth:logout", async (_, { token }) => {
+  try { return await serverPost("/api/auth/logout", { token }); }
+  catch { return { ok: true }; }
+});
+
+ipcMain.handle("user:heartbeat", async (_, { token, gameId, gameTitle }) => {
+  try { return await serverPost("/api/users/heartbeat", { token, gameId, gameTitle }); }
+  catch { return { ok: false }; }
+});
+
+ipcMain.handle("users:online", async () => {
+  try { return await serverGet("/api/users/online"); }
+  catch { return []; }
+});
+
+ipcMain.handle("friends:list", async (_, { token }) => {
+  try { return await serverGet(`/api/friends?token=${encodeURIComponent(token)}`); }
+  catch { return []; }
+});
+
+ipcMain.handle("friends:add", async (_, { token, nickname }) => {
+  try { return await serverPost("/api/friends/add", { token, nickname }); }
+  catch { return { error: "Нет соединения с сервером" }; }
+});
+
+ipcMain.handle("friends:remove", async (_, { token, friendId }) => {
+  try { return await serverPost("/api/friends/remove", { token, friendId }); }
+  catch { return { error: "Нет соединения с сервером" }; }
+});
+
 app.whenReady().then(() => {
   createWindow();
 

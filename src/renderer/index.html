@@ -25,6 +25,24 @@
             <span id="gamepadIndicatorName"></span>
           </div>
           <button
+            id="refreshGamesButton"
+            class="ghost-button icon-button"
+            title="Обновить список игр"
+            aria-label="Обновить список игр"
+          >
+            <span class="icon icon-refresh" aria-hidden="true"></span>
+          </button>
+          <button
+            id="userProfileButton"
+            class="ghost-button user-profile-btn"
+            title="Профиль игрока"
+            aria-label="Профиль игрока"
+          >
+            <span id="userAvatarCircle" class="user-avatar-circle hidden"></span>
+            <span class="icon icon-person" id="userLoginIcon" aria-hidden="true"></span>
+            <span id="userButtonLabel">Войти</span>
+          </button>
+          <button
             id="toggleMyGamesButton"
             class="ghost-button icon-button"
             title="Показать Мои игры"
@@ -398,6 +416,51 @@
       <div id="hoverPreviewScreens" class="hover-preview-screens"></div>
     </div>
     <div id="actionTooltip" class="action-tooltip hidden"></div>
+
+    <!-- ── Auth modal ──────────────────────────────────────── -->
+    <div id="authOverlay" class="auth-overlay hidden" role="dialog" aria-modal="true" aria-label="Вход / Регистрация">
+      <div class="auth-modal">
+        <button id="authCloseButton" class="auth-close-btn" aria-label="Закрыть">&times;</button>
+        <div class="auth-tabs" role="tablist">
+          <button class="auth-tab active" id="authTabLogin"    role="tab" aria-selected="true">Войти</button>
+          <button class="auth-tab"        id="authTabRegister" role="tab" aria-selected="false">Регистрация</button>
+        </div>
+        <div class="auth-form">
+          <input id="authNickname" class="auth-input" type="text"     maxlength="20" placeholder="Никнейм" autocomplete="username" />
+          <input id="authPassword" class="auth-input" type="password" placeholder="Пароль"   autocomplete="current-password" />
+          <p id="authError" class="auth-error hidden"></p>
+          <button id="authSubmitButton" class="auth-submit-btn">Войти</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Friends / social panel ──────────────────────────── -->
+    <div id="friendsPanel" class="friends-panel hidden" role="complementary" aria-label="Профиль и друзья">
+      <div class="friends-panel-header">
+        <div class="friends-user-info">
+          <span id="friendsPanelAvatar" class="friends-avatar-big"></span>
+          <div>
+            <div id="friendsPanelNickname" class="friends-nickname-big"></div>
+            <div class="friends-subtitle">Игрок</div>
+          </div>
+        </div>
+        <button id="friendsPanelClose" class="ghost-button icon-button" aria-label="Закрыть">&times;</button>
+      </div>
+
+      <div class="friends-section">
+        <h3 class="friends-section-title">Друзья</h3>
+        <div id="friendsList" class="friends-list">
+          <p class="friends-empty">Список друзей пуст</p>
+        </div>
+        <div class="friends-add-row">
+          <input id="addFriendInput" class="auth-input" type="text" maxlength="20" placeholder="Никнейм друга..." />
+          <button id="addFriendButton" class="friends-add-btn">Добавить</button>
+        </div>
+        <p id="addFriendError" class="auth-error hidden"></p>
+      </div>
+
+      <button id="logoutButton" class="friends-logout-btn">Выйти</button>
+    </div>
 
     <script src="../../node_modules/marked/lib/marked.umd.js"></script>
     <script src="./renderer.js"></script>

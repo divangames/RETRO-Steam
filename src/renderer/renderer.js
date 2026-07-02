@@ -79,6 +79,28 @@ const hoverPreviewScreensNode = document.getElementById("hoverPreviewScreens");
 const actionTooltipNode = document.getElementById("actionTooltip");
 const gamepadIndicatorNode = document.getElementById("gamepadIndicator");
 const gamepadIndicatorNameNode = document.getElementById("gamepadIndicatorName");
+const refreshGamesButton   = document.getElementById("refreshGamesButton");
+const userProfileButton    = document.getElementById("userProfileButton");
+const userAvatarCircle     = document.getElementById("userAvatarCircle");
+const userLoginIcon        = document.getElementById("userLoginIcon");
+const userButtonLabel      = document.getElementById("userButtonLabel");
+const authOverlay          = document.getElementById("authOverlay");
+const authCloseButton      = document.getElementById("authCloseButton");
+const authTabLogin         = document.getElementById("authTabLogin");
+const authTabRegister      = document.getElementById("authTabRegister");
+const authNicknameInput    = document.getElementById("authNickname");
+const authPasswordInput    = document.getElementById("authPassword");
+const authErrorNode        = document.getElementById("authError");
+const authSubmitButton     = document.getElementById("authSubmitButton");
+const friendsPanel         = document.getElementById("friendsPanel");
+const friendsPanelClose    = document.getElementById("friendsPanelClose");
+const friendsPanelAvatar   = document.getElementById("friendsPanelAvatar");
+const friendsPanelNickname = document.getElementById("friendsPanelNickname");
+const friendsListNode      = document.getElementById("friendsList");
+const addFriendInput       = document.getElementById("addFriendInput");
+const addFriendButton      = document.getElementById("addFriendButton");
+const addFriendError       = document.getElementById("addFriendError");
+const logoutButton         = document.getElementById("logoutButton");
 
 let games = [];
 let filteredGames = [];
@@ -92,9 +114,19 @@ let hoverPreviewTimer = null;
 let hoverPreviewGame = null;
 let hoverPreviewIndex = 0;
 let lastHoverSoundAt = 0;
-const USER_RATINGS_KEY = "retro-user-ratings-v1";
+const USER_RATINGS_KEY   = "retro-user-ratings-v1";
 const USER_BOOKMARKS_KEY = "retro-user-bookmarks-v1";
-const USER_PLAYTIME_KEY = "retro-user-playtime-v1";
+const USER_PLAYTIME_KEY  = "retro-user-playtime-v1";
+const AUTH_TOKEN_KEY     = "retro-auth-token";
+const AUTH_NICKNAME_KEY  = "retro-auth-nickname";
+
+let authToken    = localStorage.getItem(AUTH_TOKEN_KEY)    || null;
+let authNick     = localStorage.getItem(AUTH_NICKNAME_KEY) || null;
+let authMode     = "login";
+let heartbeatTimer        = null;
+let friendsRefreshTimer   = null;
+let currentPlayingGameId    = null;
+let currentPlayingGameTitle = null;
 const MY_GAMES_MIN_SECONDS = 3600;
 const hoverSound = new Audio(new URL("../../source/sound/hover.mp3", window.location.href).href);
 const choiceSound = new Audio(new URL("../../source/sound/choice.mp3", window.location.href).href);
@@ -1145,6 +1177,9 @@ function openImageModal(index = 0) {
 playButton.addEventListener("click", () => {
   if (!selectedGame) return;
   beginGameWindowAudioSession();
+  currentPlayingGameId    = selectedGame.id;
+  currentPlayingGameTitle = selectedGame.title;
+  if (authToken) window.retroApi.userHeartbeat(authToken, selectedGame.id, selectedGame.title).catch(() => {});
   window.retroApi.openPlayer({
     title: selectedGame.title,
     romUrl: selectedGame.romUrl,
@@ -1223,13 +1258,14 @@ ostTabPlaylistNode.addEventListener("click", () => setActiveOstTab("playlist"));
 if (window.retroApi?.onPlayerSessionEnded) {
   window.retroApi.onPlayerSessionEnded((payload) => {
     endGameWindowAudioSession();
-    const gameId = payload?.gameId;
+    currentPlayingGameId    = null;
+    currentPlayingGameTitle = null;
+    if (authToken) window.retroApi.userHeartbeat(authToken, null, null).catch(() => {});
+    const gameId   = payload?.gameId;
     const playedMs = Number(payload?.playedMs);
     if (!gameId || !Number.isFinite(playedMs)) return;
     addPlayedSeconds(gameId, playedMs / 1000);
-    if (isMyGamesMode) {
-      applyFilters();
-    }
+    if (isMyGamesMode) applyFilters();
   });
 }
 
@@ -1573,6 +1609,252 @@ document.addEventListener("click", (e) => {
   }
 });
 
+/* ══════════════════════════════════════════════════════════════
+   Refresh games
+   ══════════════════════════════════════════════════════════════ */
+
+async function refreshGames() {
+  const icon = refreshGamesButton.querySelector(".icon-refresh");
+  icon.classList.add("spinning");
+  refreshGamesButton.disabled = true;
+  try {
+    games = (await window.retroApi.listGames()).map(normalizeGame);
+    fillFilterOptions();
+    applyFilters();
+  } finally {
+    icon.classList.remove("spinning");
+    refreshGamesButton.disabled = false;
+  }
+}
+
+refreshGamesButton.addEventListener("click", refreshGames);
+
+/* ══════════════════════════════════════════════════════════════
+   Auth — user button & modal
+   ══════════════════════════════════════════════════════════════ */
+
+function updateUserButton() {
+  if (authToken && authNick) {
+    userAvatarCircle.textContent = authNick[0].toUpperCase();
+    userAvatarCircle.classList.remove("hidden");
+    userLoginIcon.classList.add("hidden");
+    userButtonLabel.textContent = authNick;
+  } else {
+    userAvatarCircle.classList.add("hidden");
+    userLoginIcon.classList.remove("hidden");
+    userButtonLabel.textContent = "Войти";
+  }
+}
+
+function setAuthMode(mode) {
+  authMode = mode;
+  authErrorNode.textContent = "";
+  authErrorNode.classList.add("hidden");
+  if (mode === "login") {
+    authTabLogin.classList.add("active");
+    authTabRegister.classList.remove("active");
+    authSubmitButton.textContent = "Войти";
+    authTabLogin.setAttribute("aria-selected", "true");
+    authTabRegister.setAttribute("aria-selected", "false");
+  } else {
+    authTabRegister.classList.add("active");
+    authTabLogin.classList.remove("active");
+    authSubmitButton.textContent = "Зарегистрироваться";
+    authTabRegister.setAttribute("aria-selected", "true");
+    authTabLogin.setAttribute("aria-selected", "false");
+  }
+}
+
+function showAuthModal() {
+  setAuthMode("login");
+  authNicknameInput.value = "";
+  authPasswordInput.value = "";
+  authOverlay.classList.remove("hidden");
+  setTimeout(() => authNicknameInput.focus(), 50);
+}
+
+function hideAuthModal() {
+  authOverlay.classList.add("hidden");
+}
+
+async function handleAuthSubmit() {
+  const nickname = authNicknameInput.value.trim();
+  const password = authPasswordInput.value;
+  if (!nickname || !password) {
+    authErrorNode.textContent = "Заполните все поля";
+    authErrorNode.classList.remove("hidden");
+    return;
+  }
+  authSubmitButton.disabled = true;
+  authErrorNode.classList.add("hidden");
+
+  const result = authMode === "login"
+    ? await window.retroApi.authLogin(nickname, password)
+    : await window.retroApi.authRegister(nickname, password);
+
+  authSubmitButton.disabled = false;
+
+  if (result?.error) {
+    authErrorNode.textContent = result.error;
+    authErrorNode.classList.remove("hidden");
+    return;
+  }
+
+  authToken = result.token;
+  authNick  = result.nickname;
+  localStorage.setItem(AUTH_TOKEN_KEY,    authToken);
+  localStorage.setItem(AUTH_NICKNAME_KEY, authNick);
+  updateUserButton();
+  hideAuthModal();
+  startHeartbeat();
+  openFriendsPanel();
+}
+
+userProfileButton.addEventListener("click", () => {
+  if (authToken) { openFriendsPanel(); } else { showAuthModal(); }
+});
+authCloseButton.addEventListener("click", hideAuthModal);
+authOverlay.addEventListener("click", (e) => { if (e.target === authOverlay) hideAuthModal(); });
+authTabLogin.addEventListener("click",    () => setAuthMode("login"));
+authTabRegister.addEventListener("click", () => setAuthMode("register"));
+authSubmitButton.addEventListener("click", handleAuthSubmit);
+authNicknameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") authPasswordInput.focus(); });
+authPasswordInput.addEventListener("keydown", (e) => { if (e.key === "Enter") handleAuthSubmit(); });
+
+/* ══════════════════════════════════════════════════════════════
+   Heartbeat — keeps session alive + tracks current game
+   ══════════════════════════════════════════════════════════════ */
+
+function startHeartbeat() {
+  stopHeartbeat();
+  const send = async () => {
+    if (!authToken) return;
+    const result = await window.retroApi.userHeartbeat(authToken, currentPlayingGameId, currentPlayingGameTitle).catch(() => null);
+    if (result?.error === "Сессия истекла") {
+      authToken = null;
+      authNick  = null;
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      localStorage.removeItem(AUTH_NICKNAME_KEY);
+      stopHeartbeat();
+      updateUserButton();
+    }
+  };
+  send();
+  heartbeatTimer = setInterval(send, 30_000);
+}
+
+function stopHeartbeat() {
+  if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Friends panel
+   ══════════════════════════════════════════════════════════════ */
+
+function openFriendsPanel() {
+  if (!authToken || !authNick) { showAuthModal(); return; }
+  friendsPanelAvatar.textContent   = authNick[0].toUpperCase();
+  friendsPanelNickname.textContent = authNick;
+  friendsPanel.classList.remove("hidden");
+  refreshFriends();
+  if (friendsRefreshTimer) clearInterval(friendsRefreshTimer);
+  friendsRefreshTimer = setInterval(refreshFriends, 30_000);
+}
+
+function closeFriendsPanel() {
+  friendsPanel.classList.add("hidden");
+  if (friendsRefreshTimer) { clearInterval(friendsRefreshTimer); friendsRefreshTimer = null; }
+}
+
+async function refreshFriends() {
+  if (!authToken) return;
+  const friends = await window.retroApi.friendsList(authToken).catch(() => []);
+  if (!Array.isArray(friends) || friends.length === 0) {
+    friendsListNode.innerHTML = '<p class="friends-empty">Список друзей пуст. Добавьте друга по никнейму.</p>';
+    return;
+  }
+  friends.sort((a, b) => (b.online ? 1 : 0) - (a.online ? 1 : 0));
+  friendsListNode.innerHTML = friends.map(f => {
+    const statusText  = f.online ? (f.currentGameTitle ? `Играет: ${f.currentGameTitle}` : "В сети") : "Не в сети";
+    const statusClass = f.online ? "" : "offline";
+    const joinBtn     = (f.online && f.currentGameId)
+      ? `<button class="friend-join-btn" data-gameid="${f.currentGameId}">Открыть</button>`
+      : "";
+    return `<div class="friend-card">
+      <div class="friend-avatar">${f.nickname[0].toUpperCase()}<span class="friend-online-dot ${statusClass}"></span></div>
+      <div class="friend-info">
+        <div class="friend-nickname">${f.nickname}</div>
+        <div class="friend-status ${statusClass}">${statusText}</div>
+      </div>
+      ${joinBtn}
+      <button class="friend-remove-btn" data-friendid="${f.id}" title="Удалить из друзей">&times;</button>
+    </div>`;
+  }).join("");
+
+  friendsListNode.querySelectorAll(".friend-join-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const game = games.find(g => g.id === btn.dataset.gameid);
+      if (game) { closeFriendsPanel(); selectGame(game); }
+    });
+  });
+  friendsListNode.querySelectorAll(".friend-remove-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      await window.retroApi.friendsRemove(authToken, btn.dataset.friendid).catch(() => {});
+      refreshFriends();
+    });
+  });
+}
+
+async function addFriend() {
+  const nickname = addFriendInput.value.trim();
+  if (!nickname) return;
+  if (!authToken) { showAuthModal(); return; }
+  addFriendButton.disabled = true;
+  addFriendError.classList.add("hidden");
+  const result = await window.retroApi.friendsAdd(authToken, nickname).catch(() => ({ error: "Ошибка соединения" }));
+  addFriendButton.disabled = false;
+  if (result?.error) {
+    addFriendError.textContent = result.error;
+    addFriendError.classList.remove("hidden");
+    return;
+  }
+  addFriendInput.value = "";
+  refreshFriends();
+}
+
+async function logout() {
+  if (authToken) await window.retroApi.authLogout(authToken).catch(() => {});
+  authToken = null;
+  authNick  = null;
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(AUTH_NICKNAME_KEY);
+  stopHeartbeat();
+  updateUserButton();
+  closeFriendsPanel();
+}
+
+friendsPanelClose.addEventListener("click", closeFriendsPanel);
+logoutButton.addEventListener("click",      logout);
+addFriendButton.addEventListener("click",   addFriend);
+addFriendInput.addEventListener("keydown",  (e) => { if (e.key === "Enter") addFriend(); });
+
+/* ── Auth init ────────────────────────────────────────────────── */
+
+async function initAuth() {
+  updateUserButton();
+  if (!authToken) return;
+  const result = await window.retroApi.userHeartbeat(authToken, null, null).catch(() => null);
+  if (!result || result.error) {
+    authToken = null;
+    authNick  = null;
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    localStorage.removeItem(AUTH_NICKNAME_KEY);
+    updateUserButton();
+  } else {
+    startHeartbeat();
+  }
+}
+
 async function bootstrap() {
   if (window.retroApi?.getServerRatings) {
     window.retroApi.getServerRatings().then((data) => {
@@ -1599,6 +1881,7 @@ async function bootstrap() {
   selectedGame = null;
   applyFilters();
   startGamepadSupport();
+  await initAuth();
 }
 
 bootstrap();

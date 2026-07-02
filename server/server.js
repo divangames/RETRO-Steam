@@ -1,12 +1,16 @@
 const express = require("express");
 const path = require("node:path");
 const fs = require("node:fs/promises");
+const crypto = require("node:crypto");
 
 const app = express();
 const PORT = 3721;
 const GAMES_ROOT = path.join(__dirname, "games", "SMD");
 const DATA_DIR = path.join(__dirname, "data");
-const RATINGS_FILE = path.join(DATA_DIR, "ratings.json");
+const RATINGS_FILE  = path.join(DATA_DIR, "ratings.json");
+const USERS_FILE    = path.join(DATA_DIR, "users.json");
+const SESSIONS_FILE = path.join(DATA_DIR, "sessions.json");
+const SESSION_TTL_MS = 12 * 60 * 1000; // 12 минут без активности
 const BASE_URL = `http://45.12.72.82:${PORT}`;
 
 app.use(express.json());
@@ -189,7 +193,224 @@ app.post("/api/ratings", async (req, res) => {
   }
 });
 
-app.get("/health", (_, res) => res.json({ ok: true }));
+/* ─── User & session helpers ───────────────────────────────────── */
+
+async function loadUsers() {
+  try {
+    if (!(await exists(USERS_FILE))) return {};
+    return JSON.parse(await fs.readFile(USERS_FILE, "utf8"));
+  } catch { return {}; }
+}
+
+async function saveUsers(u) {
+  await fs.mkdir(DATA_DIR, { recursive: true });
+  await fs.writeFile(USERS_FILE, JSON.stringify(u, null, 2), "utf8");
+}
+
+async function loadSessions() {
+  try {
+    if (!(await exists(SESSIONS_FILE))) return {};
+    return JSON.parse(await fs.readFile(SESSIONS_FILE, "utf8"));
+  } catch { return {}; }
+}
+
+async function saveSessions(s) {
+  await fs.mkdir(DATA_DIR, { recursive: true });
+  await fs.writeFile(SESSIONS_FILE, JSON.stringify(s, null, 2), "utf8");
+}
+
+function hashPassword(password, salt) {
+  return crypto.createHash("sha256").update(salt + password).digest("hex");
+}
+
+function generateToken() {
+  return crypto.randomBytes(32).toString("hex");
+}
+
+function generateId() {
+  return crypto.randomBytes(8).toString("hex");
+}
+
+async function getSession(token) {
+  if (!token) return null;
+  const sessions = await loadSessions();
+  const s = sessions[token];
+  if (!s) return null;
+  if (Date.now() - s.lastSeen > SESSION_TTL_MS) {
+    delete sessions[token];
+    await saveSessions(sessions);
+    return null;
+  }
+  return s;
+}
+
+/* ─── Auth endpoints ───────────────────────────────────────────── */
+
+app.post("/api/auth/register", async (req, res) => {
+  try {
+    const { nickname, password } = req.body;
+    if (!nickname || typeof nickname !== "string" || nickname.trim().length < 2 || nickname.trim().length > 20)
+      return res.status(400).json({ error: "Никнейм: 2–20 символов" });
+    if (!password || password.length < 4)
+      return res.status(400).json({ error: "Пароль: минимум 4 символа" });
+
+    const nick = nickname.trim();
+    const key  = nick.toLowerCase();
+    const users = await loadUsers();
+    if (users[key]) return res.status(409).json({ error: "Никнейм уже занят" });
+
+    const salt = crypto.randomBytes(16).toString("hex");
+    const id   = generateId();
+    users[key] = { id, nickname: nick, passwordHash: hashPassword(password, salt), passwordSalt: salt, friends: [], createdAt: Date.now() };
+    await saveUsers(users);
+
+    const token = generateToken();
+    const sessions = await loadSessions();
+    sessions[token] = { userId: id, nickname: nick, lastSeen: Date.now(), currentGameId: null, currentGameTitle: null };
+    await saveSessions(sessions);
+
+    res.json({ token, nickname: nick, id });
+  } catch (err) {
+    console.error("register:", err);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.post("/api/auth/login", async (req, res) => {
+  try {
+    const { nickname, password } = req.body;
+    if (!nickname || !password) return res.status(400).json({ error: "Заполните все поля" });
+
+    const key = nickname.trim().toLowerCase();
+    const users = await loadUsers();
+    const user  = users[key];
+    if (!user || hashPassword(password, user.passwordSalt) !== user.passwordHash)
+      return res.status(401).json({ error: "Неверный никнейм или пароль" });
+
+    const token = generateToken();
+    const sessions = await loadSessions();
+    sessions[token] = { userId: user.id, nickname: user.nickname, lastSeen: Date.now(), currentGameId: null, currentGameTitle: null };
+    await saveSessions(sessions);
+
+    res.json({ token, nickname: user.nickname, id: user.id });
+  } catch (err) {
+    console.error("login:", err);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.post("/api/auth/logout", async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (token) {
+      const sessions = await loadSessions();
+      delete sessions[token];
+      await saveSessions(sessions);
+    }
+    res.json({ ok: true });
+  } catch { res.json({ ok: true }); }
+});
+
+/* ─── Heartbeat / online status ────────────────────────────────── */
+
+app.post("/api/users/heartbeat", async (req, res) => {
+  try {
+    const { token, gameId, gameTitle } = req.body;
+    if (!token) return res.status(401).json({ error: "Не авторизован" });
+    const sessions = await loadSessions();
+    if (!sessions[token]) return res.status(401).json({ error: "Сессия истекла" });
+    sessions[token].lastSeen = Date.now();
+    if (gameId     !== undefined) sessions[token].currentGameId    = gameId    || null;
+    if (gameTitle  !== undefined) sessions[token].currentGameTitle = gameTitle || null;
+    await saveSessions(sessions);
+    res.json({ ok: true });
+  } catch { res.status(500).json({ error: "Ошибка сервера" }); }
+});
+
+app.get("/api/users/online", async (req, res) => {
+  try {
+    const sessions = await loadSessions();
+    const now = Date.now();
+    const online = Object.values(sessions)
+      .filter(s => now - s.lastSeen < SESSION_TTL_MS)
+      .map(s => ({ nickname: s.nickname, userId: s.userId, currentGameId: s.currentGameId, currentGameTitle: s.currentGameTitle }));
+    res.json(online);
+  } catch { res.status(500).json({ error: "Ошибка сервера" }); }
+});
+
+/* ─── Friends ───────────────────────────────────────────────────── */
+
+app.post("/api/friends/add", async (req, res) => {
+  try {
+    const { token, nickname } = req.body;
+    const session = await getSession(token);
+    if (!session) return res.status(401).json({ error: "Не авторизован" });
+
+    const targetKey = (nickname || "").trim().toLowerCase();
+    if (!targetKey) return res.status(400).json({ error: "Укажите никнейм" });
+
+    const users = await loadUsers();
+    const target = users[targetKey];
+    if (!target) return res.status(404).json({ error: "Пользователь не найден" });
+    if (target.id === session.userId) return res.status(400).json({ error: "Нельзя добавить себя" });
+
+    const meKey = Object.keys(users).find(k => users[k].id === session.userId);
+    if (!meKey) return res.status(404).json({ error: "Пользователь не найден" });
+
+    const me = users[meKey];
+    if (me.friends.includes(target.id)) return res.status(409).json({ error: "Уже в списке друзей" });
+
+    me.friends.push(target.id);
+    await saveUsers(users);
+    res.json({ ok: true, added: target.nickname });
+  } catch (err) {
+    console.error("friends/add:", err);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.post("/api/friends/remove", async (req, res) => {
+  try {
+    const { token, friendId } = req.body;
+    const session = await getSession(token);
+    if (!session) return res.status(401).json({ error: "Не авторизован" });
+
+    const users = await loadUsers();
+    const meKey = Object.keys(users).find(k => users[k].id === session.userId);
+    if (!meKey) return res.status(404).json({ error: "Пользователь не найден" });
+
+    users[meKey].friends = users[meKey].friends.filter(id => id !== friendId);
+    await saveUsers(users);
+    res.json({ ok: true });
+  } catch { res.status(500).json({ error: "Ошибка сервера" }); }
+});
+
+app.get("/api/friends", async (req, res) => {
+  try {
+    const session = await getSession(req.query.token);
+    if (!session) return res.status(401).json({ error: "Не авторизован" });
+
+    const users    = await loadUsers();
+    const sessions = await loadSessions();
+    const now      = Date.now();
+    const me = Object.values(users).find(u => u.id === session.userId);
+    if (!me) return res.status(404).json({ error: "Пользователь не найден" });
+
+    const activeSessions = Object.values(sessions).filter(s => now - s.lastSeen < SESSION_TTL_MS);
+
+    const friends = me.friends.map(fid => {
+      const fu = Object.values(users).find(u => u.id === fid);
+      if (!fu) return null;
+      const fs2 = activeSessions.find(s => s.userId === fid);
+      return { id: fid, nickname: fu.nickname, online: !!fs2, currentGameId: fs2?.currentGameId || null, currentGameTitle: fs2?.currentGameTitle || null };
+    }).filter(Boolean);
+
+    res.json(friends);
+  } catch (err) {
+    console.error("friends/get:", err);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
 
 app.post("/api/reload", (_, res) => {
   gamesCache = null;
